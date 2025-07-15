@@ -7,7 +7,7 @@ Velkommen til **Aracanix**, en fullstack analyse- og beslutningsstøtteplattform
 Dette prosjektet er delt inn i tre separate repositories som utgjør en komplett, fungerende applikasjon:
 
 *   **Frontend:** [martingit2/AiPortal-Frontend](https://github.com/martingit2/AiPortal-Frontend) 
-*   **Backend:** [martingit2/AiPortal-Backend](https://github.com/martingit2/AiPortal-Backend)
+*   **Backend:** [martingit2/AiPortal-Backend](https://github.com/martingit2/AiPortal-Backend) 
 *   **ML Service:** [martingit2/AiPortal-ML-Service](https://github.com/martingit2/AiPortal-ML-Service) (Denne repoen)
 
 ---
@@ -15,17 +15,17 @@ Dette prosjektet er delt inn i tre separate repositories som utgjør en komplett
 ## Innholdsfortegnelse
 
 - [Om Prosjektet](#om-prosjektet)
-  - [Prosjektstatus og Formål](#prosjektstatus-og-formål)
-  - [Hovedfunksjoner](#hovedfunksjoner)
-  - [Teknologistack](#teknologistack)
+    - [Prosjektstatus og Formål](#prosjektstatus-og-formål)
+    - [Hovedfunksjoner](#hovedfunksjoner)
+    - [Teknologistack](#teknologistack)
 - [Visuell Oversikt](#visuell-oversikt)
 - [Prosjektstruktur](#prosjektstruktur)
-  - [Frontend (`aracanix-frontend`)](#frontend-aracanix-frontend-1)
-  - [Backend (`Aracanix-Backend`)](#backend-aracanix-backend-1)
-  - [ML Service (`aracanix-ml-service`)](#ml-service-aracanix-ml-service-1)
+    - [Frontend (`aracanix-frontend`)](#frontend-aracanix-frontend-1)
+    - [Backend (`Aracanix-Backend`)](#backend-aracanix-backend-1)
+    - [ML Service (`aracanix-ml-service`)](#ml-service-aracanix-ml-service-1)
 - [Komme i Gang](#komme-i-gang)
-  - [Forutsetninger](#forutsetninger)
-  - [Installasjon og Kjøring](#installasjon-og-kjøring)
+    - [Forutsetninger](#forutsetninger)
+    - [Installasjon og Kjøring](#installasjon-og-kjøring)
 - [Lisens](#lisens)
 
 ---
@@ -65,11 +65,11 @@ Her er noen glimt fra plattformens ulike funksjoner, som viser administrasjon av
 
 | Bot-administrasjon (CRUD) | Ligatabeller med Drill-Down |
 | :----------------------------------------------------------: | :----------------------------------------------------------: |
-| ![Bilde av bot-administrasjonssiden](./src/bilder/boter.png) | ![Bilde av fotball-stats siden](./src/bilder/fotball-stats.png) |
+| ![Bilde av bot-administrasjonssiden](https://raw.githubusercontent.com/martingit2/AiPortal-Frontend/main/src/bilder/boter.png) | ![Bilde av fotball-stats siden](https://raw.githubusercontent.com/martingit2/AiPortal-Frontend/main/src/bilder/fotball-stats.png) |
 | **Oddsanalyse & Verdispill**                             | **Detaljert Spillerstatistikk**                     |
-| ![Bilde av oddsanalyse-siden](./src/bilder/odds-analyse.png)        | ![Bilde av spillerstatistikk-modalen](./src/bilder/spiller-stats.png) |
+| ![Bilde av oddsanalyse-siden](https://raw.githubusercontent.com/martingit2/AiPortal-Frontend/main/src/bilder/odds-analyse.png)        | ![Bilde av spillerstatistikk-modalen](https://raw.githubusercontent.com/martingit2/AiPortal-Frontend/main/src/bilder/spiller-stats.png) |
 | **Interaktiv Form-analyse**                                         | **Oversikt over Tilgjengelig Odds**                               |
-| ![Bilde av lagdetaljer-siden med graf](./src/bilder/lagdetaljer.png) | ![Bilde av odds-oversikt modalen](./src/bilder/odds.png) |
+| ![Bilde av lagdetaljer-siden med graf](https://raw.githubusercontent.com/martingit2/AiPortal-Frontend/main/src/bilder/lagdetaljer.png) | ![Bilde av odds-oversikt modalen](https://raw.githubusercontent.com/martingit2/AiPortal-Frontend/main/src/bilder/odds.png) |
 
 ---
 
