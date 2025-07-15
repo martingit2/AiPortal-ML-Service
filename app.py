@@ -4,101 +4,121 @@ from textblob import TextBlob
 import re
 import joblib
 import pandas as pd
-import numpy as np
 import os
 
 app = Flask(__name__)
 
 # --- MODELL-LASTING VED OPPSTART ---
-MODEL_FILENAME = "football_predictor_v3_multiclass.joblib"
-ENCODER_FILENAME = "result_encoder.joblib"
-model = None
-encoder = None
+# Oppdaterte filnavn for å laste de nye H2H-modellene
+MODEL_V3_FILENAME = "football_predictor_v5_h2h.joblib"
+ENCODER_FILENAME = "result_encoder_v5.joblib"
+MODEL_OU_FILENAME = "over_under_v2_h2h.joblib"
 
-EXPECTED_FEATURES = [
+model_v3 = None
+encoder_v3 = None
+model_ou = None
+
+# Den kanoniske feature-listen som nå inkluderer H2H
+CANONICAL_FEATURES = [
     'homeAvgShotsOnGoal', 'homeAvgShotsOffGoal', 'homeAvgCorners', 'homeInjuries',
     'homePlayersAvgRating', 'homePlayersAvgGoals',
     'awayAvgShotsOnGoal', 'awayAvgShotsOffGoal', 'awayAvgCorners', 'awayInjuries',
-    'awayPlayersAvgRating', 'awayPlayersAvgGoals'
+    'awayPlayersAvgRating', 'awayPlayersAvgGoals',
+    'h2hHomeWinPercentage', 'h2hAwayWinPercentage', 'h2hDrawPercentage', 'h2hAvgGoals'
 ]
 
-# Last inn modellen
-if os.path.exists(MODEL_FILENAME):
-    print(f"Laster inn lagret modell fra: {MODEL_FILENAME}")
-    model = joblib.load(MODEL_FILENAME)
-    print("Modell lastet inn.")
+# Last inn kampvinner-modellen
+if os.path.exists(MODEL_V3_FILENAME):
+    print(f"Laster inn lagret modell fra: {MODEL_V3_FILENAME}")
+    model_v3 = joblib.load(MODEL_V3_FILENAME)
+    print("Kampvinner-modell (H2H) lastet inn.")
 else:
-    print(f"ADVARSEL: Modellfilen '{MODEL_FILENAME}' ble ikke funnet.")
+    print(f"ADVARSEL: Modellfilen '{MODEL_V3_FILENAME}' ble ikke funnet.")
 
-# Last inn encoderen
 if os.path.exists(ENCODER_FILENAME):
     print(f"Laster inn lagret encoder fra: {ENCODER_FILENAME}")
-    encoder = joblib.load(ENCODER_FILENAME)
-    print("Encoder lastet inn. Klasse-rekkefølge:", encoder.classes_)
+    encoder_v3 = joblib.load(ENCODER_FILENAME)
+    print("Encoder lastet inn. Klasse-rekkefølge:", encoder_v3.classes_)
 else:
     print(f"ADVARSEL: Encoder-filen '{ENCODER_FILENAME}' ble ikke funnet.")
 
-ENTITY_KEYWORDS = {
-    "GOALS_OVER_UNDER": [r'\bover\b', r'\bunder\b', 'o/u'],
-    "CORNERS": ['corner', 'corners', 'hjørnespark'],
-    "CARDS": ['card', 'cards', 'gult', 'rødt', 'kort'],
-    "TEAM_RESULT": ['vinner', 'seier', 'tap', 'uavgjort'],
-    "TEAM_NEWS_NEGATIVE": ['skade', 'skadet', 'suspensjon'],
-    "TEAM_NEWS_POSITIVE": ['tilbake fra skade', 'full tropp']
-}
+if os.path.exists(MODEL_OU_FILENAME):
+    print(f"Laster inn lagret Over/Under-modell fra: {MODEL_OU_FILENAME}")
+    model_ou = joblib.load(MODEL_OU_FILENAME)
+    print("Over/Under-modell (H2H) lastet inn.")
+else:
+    print(f"ADVARSEL: Over/Under-modellfilen '{MODEL_OU_FILENAME}' ble ikke funnet.")
+
+
+def get_input_dataframe(request_data):
+    if not request_data:
+        return None, "Request body mangler"
+    try:
+        temp_df = pd.DataFrame([request_data])
+        final_df = temp_df.reindex(columns=CANONICAL_FEATURES, fill_value=0.0)
+
+        for col in final_df.columns:
+            final_df[col] = pd.to_numeric(final_df[col], errors='coerce').fillna(0.0)
+
+        return final_df, None
+
+    except Exception as e:
+        return None, f"Generisk feil ved laging av DataFrame: {str(e)}"
 
 
 @app.route('/predict/match_outcome', methods=['POST'])
 def predict_match_outcome():
-    """
-    Mottar features for en enkelt, kommende kamp og returnerer
-    modellens predikerte sannsynligheter for H, D, A.
-    """
-    if model is None or encoder is None:
-        return jsonify({'error': 'Modell eller encoder er ikke lastet inn. Kjør treningsskriptet først.'}), 503
+    if model_v3 is None or encoder_v3 is None:
+        return jsonify({'error': 'Kampvinner-modell eller encoder er ikke lastet inn.'}), 503
 
-    data = request.get_json()
-    if not data:
-        return jsonify({'error': 'Request body mangler'}), 400
+    input_df, error = get_input_dataframe(request.get_json())
+    if error:
+        return jsonify({'error': error}), 400
 
     try:
-        ordered_data = {feature: data.get(feature, 0) for feature in EXPECTED_FEATURES}
-        input_df = pd.DataFrame([ordered_data], columns=EXPECTED_FEATURES)
-
-        print(f"Mottok data for prediksjon: {input_df.to_dict('records')}")
-
-        # predict_proba for en multiklasse-modell returnerer en liste av lister
-        # f.eks. [[prob_class_0, prob_class_1, prob_class_2]]
-        probabilities = model.predict_proba(input_df)[0]
-
-        # Finn indeksen for hvert utfall basert på den lagrede encoderen
-        # Bruker .tolist() for å kunne bruke .index() metoden
-        class_order = encoder.classes_.tolist()
-        away_win_index = class_order.index('AWAY_WIN')
-        draw_index = class_order.index('DRAW')
-        home_win_index = class_order.index('HOME_WIN')
-
-        # Hent sannsynlighetene direkte fra riktig indeks
-        response_data = {
-            "prediction_model_version": "football_predictor_v3_multiclass",
-            "probabilities": {
-                "home_win": float(probabilities[home_win_index]),
-                "draw": float(probabilities[draw_index]),
-                "away_win": float(probabilities[away_win_index])
-            }
+        probabilities = model_v3.predict_proba(input_df)[0]
+        response_probabilities = {
+            klass.lower(): float(prob)
+            for klass, prob in zip(encoder_v3.classes_, probabilities)
         }
 
-        print(f"Returnerer prediksjon: {response_data}")
-        return jsonify(response_data)
+        response_data = {
+            "prediction_model_version": MODEL_V3_FILENAME,
+            "probabilities": response_probabilities
+        }
 
+        return jsonify(response_data)
     except Exception as e:
-        print(f"FEIL under prediksjon: {e}")
+        print(f"Prediction Error in /match_outcome: {e}")
+        return jsonify({'error': f'En feil oppstod: {str(e)}'}), 500
+
+
+@app.route('/predict/over_under', methods=['POST'])
+def predict_over_under():
+    if model_ou is None:
+        return jsonify({'error': 'Over/Under-modellen er ikke lastet inn.'}), 503
+
+    input_df, error = get_input_dataframe(request.get_json())
+    if error:
+        return jsonify({'error': error}), 400
+
+    try:
+        probabilities = model_ou.predict_proba(input_df)[0]
+        response_data = {
+            "prediction_model_version": MODEL_OU_FILENAME,
+            "probabilities": {
+                "under_2_5": float(probabilities[0]),
+                "over_2_5": float(probabilities[1])
+            }
+        }
+        return jsonify(response_data)
+    except Exception as e:
+        print(f"Prediction Error in /over_under: {e}")
         return jsonify({'error': f'En feil oppstod under prediksjon: {str(e)}'}), 500
 
 
 @app.route('/extract-insights', methods=['POST'])
 def extract_insights():
-    # Denne funksjonen er uendret
     data = request.get_json()
     if not data or 'text' not in data:
         return jsonify({'error': 'Request body må inneholde "text"-felt'}), 400
@@ -110,10 +130,20 @@ def extract_insights():
         label = 'POSITIVE'
     elif score < -0.1:
         label = 'NEGATIVE'
+
+    ENTITY_KEYWORDS = {
+        "GOALS_OVER_UNDER": [r'\bover\b', r'\bunder\b', 'o/u'],
+        "CORNERS": ['corner', 'corners', 'hjørnespark'],
+        "CARDS": ['card', 'cards', 'gult', 'rødt', 'kort'],
+        "TEAM_RESULT": ['vinner', 'seier', 'tap', 'uavgjort'],
+        "TEAM_NEWS_NEGATIVE": ['skade', 'skadet', 'suspensjon'],
+        "TEAM_NEWS_POSITIVE": ['tilbake fra skade', 'full tropp']
+    }
     entities = []
     for entity, keywords in ENTITY_KEYWORDS.items():
         if any(re.search(r'\b' + kw + r'\b', text, re.IGNORECASE) for kw in keywords):
             entities.append(entity)
+
     return jsonify({
         'general_sentiment': {'label': label, 'score': score},
         'entities_found': entities
