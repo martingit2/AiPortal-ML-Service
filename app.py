@@ -9,16 +9,16 @@ import os
 app = Flask(__name__)
 
 # --- MODELL-LASTING VED OPPSTART ---
-# Oppdaterte filnavn for å laste de nye Possession-modellene
-MODEL_V3_FILENAME = "football_predictor_v6_possession.joblib"
-ENCODER_FILENAME = "result_encoder_v6.joblib"
+# Vi peker mot de beste modellene vi har trent så langt
+MODEL_V3_FILENAME = "football_predictor_v5_h2h.joblib"
+ENCODER_FILENAME = "result_encoder_v5.joblib"
 MODEL_OU_FILENAME = "over_under_v3_possession.joblib"
 
 model_v3 = None
 encoder_v3 = None
 model_ou = None
 
-# Den kanoniske feature-listen som nå inkluderer possession
+# Listen må matche det modellene er trent på
 CANONICAL_FEATURES = [
     'homeAvgShotsOnGoal', 'homeAvgShotsOffGoal', 'homeAvgCorners', 'homeInjuries',
     'homePlayersAvgRating', 'homePlayersAvgGoals', 'homeAvgPossession',
@@ -31,7 +31,7 @@ CANONICAL_FEATURES = [
 if os.path.exists(MODEL_V3_FILENAME):
     print(f"Laster inn lagret modell fra: {MODEL_V3_FILENAME}")
     model_v3 = joblib.load(MODEL_V3_FILENAME)
-    print(f"Kampvinner-modell ({MODEL_V3_FILENAME}) lastet inn.")
+    print("Kampvinner-modell (H2H) lastet inn.")
 else:
     print(f"ADVARSEL: Modellfilen '{MODEL_V3_FILENAME}' ble ikke funnet.")
 
@@ -45,7 +45,7 @@ else:
 if os.path.exists(MODEL_OU_FILENAME):
     print(f"Laster inn lagret Over/Under-modell fra: {MODEL_OU_FILENAME}")
     model_ou = joblib.load(MODEL_OU_FILENAME)
-    print(f"Over/Under-modell ({MODEL_OU_FILENAME}) lastet inn.")
+    print("Over/Under-modell (H2H) lastet inn.")
 else:
     print(f"ADVARSEL: Over/Under-modellfilen '{MODEL_OU_FILENAME}' ble ikke funnet.")
 
@@ -55,6 +55,7 @@ def get_input_dataframe(request_data):
         return None, "Request body mangler"
     try:
         temp_df = pd.DataFrame([request_data])
+        # Bruk reindex for å garantere rekkefølge og håndtere manglende kolonner
         final_df = temp_df.reindex(columns=CANONICAL_FEATURES, fill_value=0.0)
 
         for col in final_df.columns:
@@ -77,6 +78,7 @@ def predict_match_outcome():
 
     try:
         probabilities = model_v3.predict_proba(input_df)[0]
+
         response_probabilities = {
             klass.lower(): float(prob)
             for klass, prob in zip(encoder_v3.classes_, probabilities)
