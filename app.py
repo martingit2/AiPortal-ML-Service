@@ -1,155 +1,110 @@
-# app.py
+# app.py (KORRIGERT IGJEN FOR TYPE-FEIL)
+
 from flask import Flask, request, jsonify
-from textblob import TextBlob
-import re
 import joblib
 import pandas as pd
 import os
+import numpy as np
+from sklearn.calibration import CalibratedClassifierCV
 
 app = Flask(__name__)
 
-# --- MODELL-LASTING VED OPPSTART ---
-# Vi peker mot de beste modellene vi har trent så langt
-MODEL_V3_FILENAME = "football_predictor_v5_h2h.joblib"
-ENCODER_FILENAME = "result_encoder_v5.joblib"
-MODEL_OU_FILENAME = "over_under_v3_possession.joblib"
+# --- DYNAMISK MODELL-LASTING (forblir lik, den fungerte) ---
+MODELS_DIR = "."
+loaded_models = {}
+canonical_features = []
 
-model_v3 = None
-encoder_v3 = None
-model_ou = None
+print("--- Starter dynamisk modell-lasting ---")
+canonical_model_found = False
+model_files = sorted([f for f in os.listdir(MODELS_DIR) if f.endswith(".joblib")], reverse=True)
 
-# Listen må matche det modellene er trent på
-CANONICAL_FEATURES = [
-    'homeAvgShotsOnGoal', 'homeAvgShotsOffGoal', 'homeAvgCorners', 'homeInjuries',
-    'homePlayersAvgRating', 'homePlayersAvgGoals', 'homeAvgPossession',
-    'awayAvgShotsOnGoal', 'awayAvgShotsOffGoal', 'awayAvgCorners', 'awayInjuries',
-    'awayPlayersAvgRating', 'awayPlayersAvgGoals', 'awayAvgPossession',
-    'h2hHomeWinPercentage', 'h2hAwayWinPercentage', 'h2hDrawPercentage', 'h2hAvgGoals'
-]
+for filename in model_files:
+    if filename.startswith("football_predictor") and not canonical_model_found:
+        try:
+            model = joblib.load(os.path.join(MODELS_DIR, filename))
+            base_estimator = model.estimator if isinstance(model, CalibratedClassifierCV) else model
+            if hasattr(base_estimator, 'feature_names_in_'):
+                canonical_features = base_estimator.feature_names_in_
+                print(f"✔️ Canonical features satt fra '{filename}': {len(canonical_features)} features.")
+                canonical_model_found = True
+        except Exception as e:
+            print(f"❌ Feil ved lasting av canonical-modell '{filename}': {e}")
 
-# Last inn kampvinner-modellen
-if os.path.exists(MODEL_V3_FILENAME):
-    print(f"Laster inn lagret modell fra: {MODEL_V3_FILENAME}")
-    model_v3 = joblib.load(MODEL_V3_FILENAME)
-    print("Kampvinner-modell (H2H) lastet inn.")
-else:
-    print(f"ADVARSEL: Modellfilen '{MODEL_V3_FILENAME}' ble ikke funnet.")
+print("\n--- Laster alle modeller ---")
+for filename in model_files:
+    if filename not in loaded_models:
+        try:
+            model = joblib.load(os.path.join(MODELS_DIR, filename))
+            loaded_models[filename] = model
+            print(f"✔️ Lastet inn modell: {filename}")
+        except Exception as e:
+            print(f"❌ Kunne ikke laste {filename}: {e}")
 
-if os.path.exists(ENCODER_FILENAME):
-    print(f"Laster inn lagret encoder fra: {ENCODER_FILENAME}")
-    encoder_v3 = joblib.load(ENCODER_FILENAME)
-    print("Encoder lastet inn. Klasse-rekkefølge:", encoder_v3.classes_)
-else:
-    print(f"ADVARSEL: Encoder-filen '{ENCODER_FILENAME}' ble ikke funnet.")
-
-if os.path.exists(MODEL_OU_FILENAME):
-    print(f"Laster inn lagret Over/Under-modell fra: {MODEL_OU_FILENAME}")
-    model_ou = joblib.load(MODEL_OU_FILENAME)
-    print("Over/Under-modell (H2H) lastet inn.")
-else:
-    print(f"ADVARSEL: Over/Under-modellfilen '{MODEL_OU_FILENAME}' ble ikke funnet.")
+if (isinstance(canonical_features, np.ndarray) and canonical_features.size == 0) or \
+        (isinstance(canonical_features, list) and not canonical_features):
+    print("ADVARSEL: 'canonical_features' ble ikke satt. Sjekk at minst én gyldig modell finnes.")
 
 
-def get_input_dataframe(request_data):
-    if not request_data:
-        return None, "Request body mangler"
+def get_input_dataframe(features_dict):
+    if not features_dict:
+        return None, "Mangler 'features' i request body."
+    if (isinstance(canonical_features, np.ndarray) and canonical_features.size == 0) or \
+            (isinstance(canonical_features, list) and not canonical_features):
+        return None, "Serverfeil: 'canonical_features' er ikke definert. Kan ikke prosessere request."
     try:
-        temp_df = pd.DataFrame([request_data])
-        # Bruk reindex for å garantere rekkefølge og håndtere manglende kolonner
-        final_df = temp_df.reindex(columns=CANONICAL_FEATURES, fill_value=0.0)
-
+        temp_df = pd.DataFrame([features_dict])
+        final_df = temp_df.reindex(columns=canonical_features, fill_value=0.0)
         for col in final_df.columns:
             final_df[col] = pd.to_numeric(final_df[col], errors='coerce').fillna(0.0)
-
         return final_df, None
-
     except Exception as e:
-        return None, f"Generisk feil ved laging av DataFrame: {str(e)}"
+        return None, f"Feil ved bygging av DataFrame: {str(e)}"
 
 
-@app.route('/predict/match_outcome', methods=['POST'])
-def predict_match_outcome():
-    if model_v3 is None or encoder_v3 is None:
-        return jsonify({'error': 'Kampvinner-modell eller encoder er ikke lastet inn.'}), 503
-
-    input_df, error = get_input_dataframe(request.get_json())
-    if error:
-        return jsonify({'error': error}), 400
-
-    try:
-        probabilities = model_v3.predict_proba(input_df)[0]
-
-        response_probabilities = {
-            klass.lower(): float(prob)
-            for klass, prob in zip(encoder_v3.classes_, probabilities)
-        }
-
-        response_data = {
-            "prediction_model_version": MODEL_V3_FILENAME,
-            "probabilities": response_probabilities
-        }
-
-        return jsonify(response_data)
-    except Exception as e:
-        print(f"Prediction Error in /match_outcome: {e}")
-        return jsonify({'error': f'En feil oppstod: {str(e)}'}), 500
-
-
-@app.route('/predict/over_under', methods=['POST'])
-def predict_over_under():
-    if model_ou is None:
-        return jsonify({'error': 'Over/Under-modellen er ikke lastet inn.'}), 503
-
-    input_df, error = get_input_dataframe(request.get_json())
-    if error:
-        return jsonify({'error': error}), 400
-
-    try:
-        probabilities = model_ou.predict_proba(input_df)[0]
-        response_data = {
-            "prediction_model_version": MODEL_OU_FILENAME,
-            "probabilities": {
-                "under_2_5": float(probabilities[0]),
-                "over_2_5": float(probabilities[1])
-            }
-        }
-        return jsonify(response_data)
-    except Exception as e:
-        print(f"Prediction Error in /over_under: {e}")
-        return jsonify({'error': f'En feil oppstod under prediksjon: {str(e)}'}), 500
-
-
-@app.route('/extract-insights', methods=['POST'])
-def extract_insights():
+# --- OPPDATERT, ROBUST PREDIKSJONSLOGIKK ---
+@app.route('/predict', methods=['POST'])
+def predict():
     data = request.get_json()
-    if not data or 'text' not in data:
-        return jsonify({'error': 'Request body må inneholde "text"-felt'}), 400
-    text = data['text']
-    blob = TextBlob(text)
-    score = blob.sentiment.polarity
-    label = 'NEUTRAL'
-    if score > 0.1:
-        label = 'POSITIVE'
-    elif score < -0.1:
-        label = 'NEGATIVE'
+    if not data or 'modelName' not in data or 'features' not in data:
+        return jsonify({'error': "Request body må inneholde 'modelName' og 'features'."}), 400
 
-    ENTITY_KEYWORDS = {
-        "GOALS_OVER_UNDER": [r'\bover\b', r'\bunder\b', 'o/u'],
-        "CORNERS": ['corner', 'corners', 'hjørnespark'],
-        "CARDS": ['card', 'cards', 'gult', 'rødt', 'kort'],
-        "TEAM_RESULT": ['vinner', 'seier', 'tap', 'uavgjort'],
-        "TEAM_NEWS_NEGATIVE": ['skade', 'skadet', 'suspensjon'],
-        "TEAM_NEWS_POSITIVE": ['tilbake fra skade', 'full tropp']
-    }
-    entities = []
-    for entity, keywords in ENTITY_KEYWORDS.items():
-        if any(re.search(r'\b' + kw + r'\b', text, re.IGNORECASE) for kw in keywords):
-            entities.append(entity)
+    model_name = data['modelName']
+    features = data['features']
 
-    return jsonify({
-        'general_sentiment': {'label': label, 'score': score},
-        'entities_found': entities
-    })
+    if model_name not in loaded_models:
+        return jsonify({'error': f"Modell '{model_name}' er ikke lastet inn eller finnes ikke."}), 404
+
+    model = loaded_models[model_name]
+    input_df, error = get_input_dataframe(features)
+    if error:
+        return jsonify({'error': error}), 400
+
+    try:
+        # Encoder-filer skal ikke brukes til prediksjon
+        if 'encoder' in model_name:
+            return jsonify({
+                "model_used": model_name,
+                "probabilities": {"classes": model.classes_.tolist()}
+            })
+
+        probabilities = model.predict_proba(input_df)[0]
+
+        # Standardiser outputen til "class_0", "class_1", etc. for alle modeller.
+        # Dette er den mest robuste løsningen.
+        response_probs = {
+            f"class_{i}": float(prob)
+            for i, prob in enumerate(probabilities)
+        }
+
+        response_data = {
+            "model_used": model_name,
+            "probabilities": response_probs
+        }
+        return jsonify(response_data)
+
+    except Exception as e:
+        print(f"Prediction Error for model {model_name}: {e}")
+        return jsonify({'error': f'En feil oppstod under prediksjon: {str(e)}'}), 500
 
 
 if __name__ == '__main__':
