@@ -74,6 +74,11 @@ Her er noen glimt fra plattformens ulike funksjoner, som viser administrasjon av
 | ![Bilde av porteføljeoversikt](https://raw.githubusercontent.com/martingit2/AiPortal-Frontend/main/src/bilder/portfolio.png) | ![Bilde av spesifikke spill i porteføljen](https://raw.githubusercontent.com/martingit2/AiPortal-Frontend/main/src/bilder/portfoliobets.png) |
 | **Prediksjonsmodeller** | **Utvidet Odds-visning** |
 | ![Bilde av oversikt over modeller](https://raw.githubusercontent.com/martingit2/AiPortal-Frontend/main/src/bilder/modeller.png) | ![Bilde av utvidet odds-visning](https://raw.githubusercontent.com/martingit2/AiPortal-Frontend/main/src/bilder/merodds.png) |
+| **Discord-varsler** | **Kampoversikt** |
+| ![Bilde av Discord-varsler](https://raw.githubusercontent.com/martingit2/AiPortal-Frontend/main/src/bilder/discordbot.png) | ![Bilde av kampoversikt](https://raw.githubusercontent.com/martingit2/AiPortal-Frontend/main/src/bilder/fixtures.png) |
+| **Detaljert Lagstatistikk** | **Detaljer om Modeller** |
+| ![Bilde av lagstatistikk](https://raw.githubusercontent.com/martingit2/AiPortal-Frontend/main/src/bilder/lag-stats.png) | ![Bilde av modelldetaljer](https://raw.githubusercontent.com/martingit2/AiPortal-Frontend/main/src/bilder/modelldetaljer.png) |
+
 
 ---
 
